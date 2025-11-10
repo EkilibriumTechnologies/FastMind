@@ -11,13 +11,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 
-import os
-import streamlit as st
-
+# Ensure Streamlit binds to Render's dynamic port
 port = int(os.environ.get("PORT", 10000))
-st.set_page_config(page_title="FastMind")
+st.set_page_config(page_title="FastMind", layout="centered")
 
-# ==============================================================
 # 🧠 CONFIGURATION
 # ==============================================================
 st.set_page_config(page_title="FastMind", layout="centered")
