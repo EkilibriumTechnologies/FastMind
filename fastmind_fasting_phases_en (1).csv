@@ -1,0 +1,11 @@
+﻿fase_inicio_h,fase_fin_h,keyword,color_hex,description,what_to_eat,symptoms,recommendations,tip
+0,4,Digest,#FFA500,Your body is processing the last meal and absorbing nutrients.,"Water, green tea, or black coffee.",Drowsiness or heaviness.,Avoid eating again; let digestion finish.,Begin your journey calmly.
+4,12,Shift,#FFD700,The body starts using liver glycogen for energy.,"Water, black coffee, or mineral water.","Mild hunger, cravings.",Stay busy and drink water every hour.,Your metabolism begins to shift.
+12,18,Burn,#ADFF2F,Glycogen reserves deplete and fat burning begins.,Water with electrolytes or green tea.,"Mild headache, feeling of emptiness.",Stay hydrated and avoid excess caffeine.,Your body starts real fat burning.
+18,24,Switch,#00B050,Ketosis activates: your body uses fat as its main energy source.,Water with pink salt or clear broth.,"Ketone breath, unstable energy.",Rest or walk lightly.,You are entering repair mode.
+24,36,Focus,#00B0F0,Ketosis stabilizes; mental clarity increases.,"Water, herbal teas, or green tea.","Reduced appetite, higher focus.",Avoid intense exercise; listen to your body.,Your mind becomes sharper.
+36,48,Cleanse,#0070C0,Autophagy begins: cells remove waste and regenerate.,"Water, herbal tea, electrolytes.","Calm, mild fatigue possible.",Rest and reduce stress.,Your body is cleansing at the cellular level.
+48,60,Renew,#7030A0,Damaged proteins degrade and cells renew themselves.,"Water, teas, or fat-free broth.","Mild fatigue, occasional dizziness.",Take breaks and breathe deeply.,You are renewing your system.
+60,72,Reset,#9966CC,Your immune system strengthens and produces new cells.,Water or mild tea.,"Light dizziness, mental calm.",Avoid strong caffeine and prioritize rest.,Your body is rebooting from within.
+72,96,Zen,#708090,Your metabolism becomes efficient and stable in prolonged ketosis.,"Water, teas, vegetable broths.","Well-being, balanced energy.",Sleep well and stay hydrated.,You are in full control.
+96,120,Rebirth,#F5F5F5,Maximum cellular regeneration achieved; time to break your fast.,"Broth, light protein, soft fruits.","Controlled hunger, heightened senses.",Break your fast slowly and with gratitude.,You are reborn in balance.
