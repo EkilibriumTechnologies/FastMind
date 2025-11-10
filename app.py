@@ -120,8 +120,9 @@ retriever = load_knowledge_base()
 def ask_fastmind(question, hours):
     phase = get_phase(hours)
     kb_text = ""
+
     if retriever:
-       docs = retriever.invoke(question)
+        docs = retriever.invoke(question)
         kb_text = "\n\n".join(d.page_content for d in docs)
 
     context = f"""
@@ -132,6 +133,8 @@ def ask_fastmind(question, hours):
     Common symptoms: {phase['symptoms']}
     Recommendations: {phase['recommendations']}
     Tip: {phase['tip']}
+    """
+
 
     Reference knowledge base (if available):
     {kb_text}
