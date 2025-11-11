@@ -42,7 +42,7 @@ def get_phase(hours):
 
 
 # ==============================================================
-# 📚 BASE DE CONOCIMIENTO
+# 📚 KNOWLEDGE BASE
 # ==============================================================
 @st.cache_resource(show_spinner=False)
 def load_knowledge_base():
@@ -120,6 +120,7 @@ if "chat_history" not in st.session_state:
 # ==============================================================
 tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
 
+
 # ==============================================================
 # ⏱️ TIMER TAB
 # ==============================================================
@@ -137,16 +138,15 @@ with tab_timer:
     dial_placeholder = st.empty()
     info_placeholder = st.empty()
 
-    # Mientras esté corriendo el ayuno, actualiza cada segundo
+    # Timer loop
     while st.session_state.running:
         st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
         hours = st.session_state.elapsed_hours
         phase = get_phase(hours)
         color = phase["color_hex"]
         pct = min((hours / 120) * 100, 100)
-        label = f"{int(hours)}h {(hours % 1)*60:.0f}m"
 
-        # Dial dinámico
+        # Dial only shows phase name in the center now
         fig = go.Figure(
             go.Pie(values=[pct, 100 - pct], hole=0.7,
                    marker_colors=[color, "#E0E0E0"], textinfo="none")
@@ -155,24 +155,21 @@ with tab_timer:
             showlegend=False,
             margin=dict(t=0, b=0, l=0, r=0),
             annotations=[
-                dict(text=label, x=0.5, y=0.5, font_size=26,
-                     font_color=color, showarrow=False),
-                dict(text=phase["keyword"], x=0.5, y=0.37,
-                     font_size=16, showarrow=False)
+                dict(text=f"<b>{phase['keyword']}</b>", x=0.5, y=0.5,
+                     font_size=28, font_color=color, showarrow=False)
             ]
         )
 
-        # Actualizar visual sin recargar la app
         dial_placeholder.plotly_chart(fig, use_container_width=True)
+
         elapsed_sec = int(hours * 3600)
         h, m, s = elapsed_sec // 3600, (elapsed_sec % 3600) // 60, elapsed_sec % 60
         info_placeholder.markdown(
-            f"<h2 style='text-align:center; color:{color};'>{h:02d}:{m:02d}:{s:02d}</h2>",
+            f"<h2 style='text-align:center; color:{color}; font-weight:bold;'>{h:02d}:{m:02d}:{s:02d}</h2>",
             unsafe_allow_html=True
         )
         time.sleep(1)
 
-    # Si no está corriendo
     if not st.session_state.running:
         st.info("Presiona ▶️ **Start** para comenzar tu ayuno.")
 
