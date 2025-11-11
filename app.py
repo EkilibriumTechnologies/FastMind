@@ -16,6 +16,9 @@ try:
 except Exception:
     HAS_LANGCHAIN = False
 
+except Exception:
+    HAS_LANGCHAIN = False
+
 
 # ==============================================================
 # 🧠 CONFIGURACIÓN
