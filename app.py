@@ -42,7 +42,7 @@ def get_phase(hours):
 
 
 # ==============================================================
-# 📚 KNOWLEDGE BASE (PDF)
+# 📚 BASE DE CONOCIMIENTO (PDF)
 # ==============================================================
 @st.cache_resource(show_spinner=False)
 def load_knowledge_base():
@@ -147,7 +147,7 @@ with tab_timer:
     if col2.button("⏹ Stop"):
         st.session_state.running = False
 
-    # 🔁 Redibujar cada 3 segundos mientras el timer corre
+    # 🔁 Redibujar cada 3 s mientras el timer corre
     if st.session_state.running:
         time.sleep(3)
         st.rerun()
@@ -159,8 +159,12 @@ with tab_timer:
         label = f"{int(st.session_state.elapsed_hours)}h {(st.session_state.elapsed_hours % 1)*60:.0f}m"
 
         fig = go.Figure(
-            go.Pie(values=[pct, 100 - pct], hole=0.7,
-                   marker_colors=[color, "#E0E0E0"], textinfo="none")
+            go.Pie(
+                values=[pct, 100 - pct],
+                hole=0.7,
+                marker_colors=[color, "#E0E0E0"],
+                textinfo="none"
+            )
         )
         fig.update_layout(
             showlegend=False,
@@ -173,5 +177,53 @@ with tab_timer:
             ]
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown(f"<h3 style='text-align:center;'>🌙 {phase['keyword']}</h3>", unsafe_allow_html=True)
-        st.markdown(f"<p style='text-align:center; color:#4A4A4A;'>{phase['tip']}</p>", unsafe_allow_htm
+        st.markdown(
+            f"<h3 style='text-align:center;'>🌙 {phase['keyword']}</h3>",
+            unsafe_allow_html=True
+        )
+        st.markdown(
+            f"<p style='text-align:center; color:#4A4A4A;'>{phase['tip']}</p>",
+            unsafe_allow_html=True
+        )
+
+        # Reloj digital
+        elapsed_sec = int(st.session_state.elapsed_hours * 3600)
+        h, m, s = elapsed_sec // 3600, (elapsed_sec % 3600) // 60, elapsed_sec % 60
+        st.markdown(
+            f"<h2 style='text-align:center; color:{color};'>{h:02d}:{m:02d}:{s:02d}</h2>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.info("Presiona ▶️ **Start** para comenzar tu ayuno.")
+
+
+# ==============================================================
+# 💬 CHAT TAB
+# ==============================================================
+with tab_chat:
+    st.header("💬 Asistente de Ayuno FastMind")
+
+    question = st.text_input("Haz una pregunta sobre ayuno, hidratación o bienestar:")
+    if st.button("Preguntar"):
+        hours = st.session_state.elapsed_hours
+        with st.spinner("Pensando..."):
+            answer = ask_fastmind(question, hours)
+        st.session_state.chat_history.append((question, answer))
+
+    for q, a in st.session_state.chat_history:
+        st.markdown(f"**Tú:** {q}")
+        st.markdown(f"💡 *FastMind:* {a}")
+
+
+# ==============================================================
+# ✨ FOOTER
+# ==============================================================
+st.markdown(
+    """
+---
+<div style='text-align:center;'>
+    <small>Powered by <b>Ekilibrium Technologies</b> | Built with Streamlit & OpenAI</small>
+</div>
+""",
+    unsafe_allow_html=True,
+)
