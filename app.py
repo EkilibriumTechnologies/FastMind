@@ -141,13 +141,14 @@ if "elapsed_hours" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+
 # ==============================================================
-# 🧵 BACKGROUND THREAD QUE ACTUALIZA EL TIEMPO
+# 🧵 HILO BACKGROUND
 # ==============================================================
 def run_timer():
     while st.session_state.running:
         st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
-        time.sleep(3)
+        time.sleep(1)
 
 # ==============================================================
 # 🎛 CONTROLES
@@ -164,7 +165,19 @@ if col2.button("⏹ Stop"):
 
 
 # ==============================================================
-# 🎯 DIAL DISPLAY (solo se redibuja)
+# 🔄 REFRESCO AUTOMÁTICO (sin bloquear chat)
+# ==============================================================
+if st.session_state.running:
+    st_autorefresh = st.experimental_rerun  # fallback older versions
+    try:
+        from streamlit_autorefresh import st_autorefresh
+    except Exception:
+        pass
+    st_autorefresh(interval=3000, key="timer_refresh")
+
+
+# ==============================================================
+# 🎯 MOSTRAR DIAL
 # ==============================================================
 if st.session_state.start_time:
     fig, phase = draw_dial(st.session_state.elapsed_hours)
