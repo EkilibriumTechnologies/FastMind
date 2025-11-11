@@ -19,7 +19,7 @@ except Exception:
 
 
 # ==============================================================
-# 🧠 CONFIG
+# 🧠 CONFIGURACIÓN
 # ==============================================================
 st.set_page_config(page_title="FastMind", layout="centered")
 st.title("🧠 FastMind – AI Fasting Tracker")
@@ -143,15 +143,16 @@ if "chat_history" not in st.session_state:
 
 
 # ==============================================================
-# 🧵 HILO BACKGROUND
+# 🧵 HILO BACKGROUND DEL TIMER
 # ==============================================================
 def run_timer():
     while st.session_state.running:
         st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
         time.sleep(1)
 
+
 # ==============================================================
-# 🎛 CONTROLES
+# 🎛 CONTROLES DE TIMER
 # ==============================================================
 col1, col2 = st.columns(2)
 if col1.button("▶️ Start"):
@@ -165,15 +166,11 @@ if col2.button("⏹ Stop"):
 
 
 # ==============================================================
-# 🔄 REFRESCO AUTOMÁTICO (sin bloquear chat)
+# 🔄 REFRESCO AUTOMÁTICO CADA 3 SEGUNDOS
 # ==============================================================
 if st.session_state.running:
-    st_autorefresh = st.experimental_rerun  # fallback older versions
-    try:
-        from streamlit_autorefresh import st_autorefresh
-    except Exception:
-        pass
-    st_autorefresh(interval=3000, key="timer_refresh")
+    time.sleep(3)
+    st.rerun()
 
 
 # ==============================================================
@@ -204,6 +201,7 @@ if st.button("Ask"):
 for q, a in st.session_state.chat_history:
     st.markdown(f"**You:** {q}")
     st.markdown(f"💡 *FastMind:* {a}")
+
 
 # ==============================================================
 # ✨ FOOTER
