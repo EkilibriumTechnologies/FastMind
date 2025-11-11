@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from openai import OpenAI
 
-# --- Optional LangChain (RAG) support ---
+# --- Optional LangChain (RAG) Support ---
 try:
     from langchain_community.document_loaders import PyPDFLoader
     from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -28,8 +28,8 @@ api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     st.error("❌ Missing OPENAI_API_KEY environment variable.")
     st.stop()
-client = OpenAI(api_key=api_key)
 
+client = OpenAI(api_key=api_key)
 
 # ==============================================================
 # LOAD FASTING DATA
@@ -124,7 +124,7 @@ Reference knowledge base:
 
 
 # ==============================================================
-# STATE
+# STATE MANAGEMENT
 # ==============================================================
 if "start_time" not in st.session_state:
     st.session_state.start_time = None
@@ -137,7 +137,7 @@ if "chat_history" not in st.session_state:
 
 
 # ==============================================================
-# UI LAYOUT
+# INTERFACE (Tabs)
 # ==============================================================
 tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
 
@@ -185,8 +185,8 @@ with tab_timer:
             unsafe_allow_html=True
         )
 
-        # Lightweight refresh trick (keeps Render stable)
-        st.experimental_set_query_params(t=str(int(time.time())))
+        # ✅ Safe non-blocking refresh for Render
+        st.query_params["refresh"] = str(int(time.time()))
 
     else:
         st.info("Press ▶️ **Start** to begin your fast.")
