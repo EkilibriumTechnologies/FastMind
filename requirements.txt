@@ -1,7 +1,5 @@
 streamlit==1.39.0
-pypdf
 pandas
-numpy
 plotly
 openai
 langchain
@@ -9,3 +7,4 @@ langchain-community
 langchain-openai
 chromadb
 tiktoken
+pypdf
