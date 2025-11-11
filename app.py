@@ -33,21 +33,45 @@ client = OpenAI(api_key=api_key)
 # =========================================================
 @st.cache_data
 def load_phases():
-    # Default fallback if CSV not found
-    default = pd.DataFrame([
-        {"start_h": 0, "end_h": 4, "phase": "Digest", "desc": "Your body is digesting food.", "color": "#F4A261"},
-        {"start_h": 4, "end_h": 12, "phase": "Fat Burn", "desc": "Fat burning begins.", "color": "#E76F51"},
-        {"start_h": 12, "end_h": 24, "phase": "Deep Burn", "desc": "Ketones start forming.", "color": "#2A9D8F"},
-        {"start_h": 24, "end_h": 48, "phase": "Autophagy", "desc": "Cells begin repair and detox.", "color": "#264653"},
-        {"start_h": 48, "end_h": 120, "phase": "Ketosis", "desc": "Full ketosis reached.", "color": "#1D3557"}
-    ])
+    # Try to load the English CSV
     if os.path.exists("fastmind_fasting_phases_en.csv"):
-        try:
-            df = pd.read_csv("fastmind_fasting_phases_en.csv")
-            return df
-        except Exception:
-            return default
-    return default
+        df = pd.read_csv("fastmind_fasting_phases_en.csv")
+
+        # Normalize column names (auto-rename)
+        df.columns = [c.strip().lower() for c in df.columns]
+
+        # Detect phase range columns
+        start_col = next((c for c in df.columns if "start" in c or "inicio" in c), None)
+        end_col = next((c for c in df.columns if "end" in c or "fin" in c), None)
+        keyword_col = next((c for c in df.columns if "key" in c or "fase" in c), None)
+
+        # Rename dynamically
+        if start_col and end_col:
+            df.rename(columns={start_col: "start_h", end_col: "end_h"}, inplace=True)
+        if keyword_col:
+            df.rename(columns={keyword_col: "phase"}, inplace=True)
+
+        # If no color column, assign defaults
+        if "color_hex" in df.columns:
+            df.rename(columns={"color_hex": "color"}, inplace=True)
+        elif "color" not in df.columns:
+            df["color"] = ["#F4A261", "#E76F51", "#2A9D8F", "#264653", "#1D3557"]
+
+        # Fallback for text fields
+        for col in ["description", "what_to_eat", "symptoms", "recommendations", "tip"]:
+            if col not in df.columns:
+                df[col] = ""
+
+        return df
+
+    # Default data (if CSV missing)
+    return pd.DataFrame([
+        {"start_h": 0, "end_h": 4, "phase": "Digest", "description": "Body digests food", "color": "#F4A261"},
+        {"start_h": 4, "end_h": 12, "phase": "Fat Burn", "description": "Fat burning starts", "color": "#E76F51"},
+        {"start_h": 12, "end_h": 24, "phase": "Deep Burn", "description": "Ketones increase", "color": "#2A9D8F"},
+        {"start_h": 24, "end_h": 48, "phase": "Autophagy", "description": "Cell regeneration begins", "color": "#264653"},
+        {"start_h": 48, "end_h": 120, "phase": "Ketosis", "description": "Full ketosis achieved", "color": "#1D3557"},
+    ])
 
 phases = load_phases()
 
@@ -56,7 +80,7 @@ def get_phase(hours):
     return phase.iloc[-1] if not phase.empty else phases.iloc[-1]
 
 # =========================================================
-# 📚 KNOWLEDGE BASE
+# 📚 KNOWLEDGE BASE (RAG)
 # =========================================================
 @st.cache_resource(show_spinner=False)
 def load_kb():
@@ -89,18 +113,18 @@ def ask_fastmind(question, hours):
     context = f"""
 You are FastMind, a scientific fasting coach.
 Current phase: {phase['phase']}
-Description: {phase['desc']}
-Time fasted: {hours:.1f} hours
+Description: {phase['description']}
+Time fasting: {hours:.1f} hours.
 
 Knowledge base info:
-{kb_text if kb_text else 'No extra context found.'}
+{kb_text if kb_text else "No extra context found."}
 """
 
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Be a helpful, concise, science-based fasting coach."},
+                {"role": "system", "content": "Be a concise, motivational fasting coach using science-backed insights."},
                 {"role": "user", "content": f"{context}\n\nUser question: {question}"}
             ]
         )
@@ -109,7 +133,7 @@ Knowledge base info:
         return f"⚠️ Chat error: {e}"
 
 # =========================================================
-# 🔁 STATE
+# 🔁 STATE MANAGEMENT
 # =========================================================
 if "start_time" not in st.session_state:
     st.session_state.start_time = None
@@ -121,12 +145,12 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
 # =========================================================
-# 🧭 UI WITH TWO INDEPENDENT AGENTS
+# 🧭 INTERFACE (2 Independent Agents)
 # =========================================================
 tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
 
 # =========================================================
-# ⏱️ TIMER AGENT
+# TIMER AGENT
 # =========================================================
 with tab_timer:
     st.header("⏱️ Fasting Progress Tracker")
@@ -139,29 +163,22 @@ with tab_timer:
     if col2.button("⏹ Stop", use_container_width=True):
         st.session_state.running = False
 
-    # Calculate current progress
+    # Calculate elapsed time
     if st.session_state.running and st.session_state.start_time:
         st.session_state.elapsed_h = (time.time() - st.session_state.start_time) / 3600
+
     hours = st.session_state.elapsed_h
     phase = get_phase(hours)
     color = phase["color"]
 
-    # Draw the progress dial
+    # Circular progress
     pct = min((hours / 120) * 100, 100)
-    fig = go.Figure(
-        go.Pie(
-            values=[pct, 100 - pct],
-            hole=0.75,
-            marker_colors=[color, "#E0E0E0"],
-            textinfo="none"
-        )
-    )
+    fig = go.Figure(go.Pie(values=[pct, 100 - pct], hole=0.75, marker_colors=[color, "#E0E0E0"], textinfo="none"))
     fig.update_layout(
         showlegend=False,
         margin=dict(t=0, b=0, l=0, r=0),
         annotations=[
-            dict(text=f"<b>{phase['phase']}</b>", x=0.5, y=0.5,
-                 font_size=28, font_color=color, showarrow=False)
+            dict(text=f"<b>{phase['phase']}</b>", x=0.5, y=0.5, font_size=28, font_color=color, showarrow=False)
         ]
     )
     st.plotly_chart(fig, use_container_width=True)
@@ -173,30 +190,26 @@ with tab_timer:
         f"<h1 style='text-align:center; color:{color}; font-weight:bold;'>{h:02d}:{m:02d}:{s:02d}</h1>",
         unsafe_allow_html=True
     )
-
-    st.caption(f"Current phase: {phase['phase']} — {phase['desc']}")
+    st.caption(f"Phase: {phase['phase']} — {phase['description']}")
     st.query_params["refresh"] = str(int(time.time()))
 
 # =========================================================
-# 💬 CHAT AGENT
+# CHAT AGENT
 # =========================================================
 with tab_chat:
     st.header("💬 FastMind Chatbot")
 
-    # Chat history
     for q, a in st.session_state.chat_history:
         with st.chat_message("user"):
             st.markdown(q)
         with st.chat_message("assistant"):
             st.markdown(a)
 
-    # User input
-    question = st.chat_input("Ask about fasting, hydration, or mindset...")
+    question = st.chat_input("Ask something about fasting, hydration, or mindset...")
     if question:
         st.session_state.chat_history.append((question, "thinking..."))
         st.experimental_rerun()
 
-    # Generate new message
     if st.session_state.chat_history and st.session_state.chat_history[-1][1] == "thinking...":
         last_q = st.session_state.chat_history[-1][0]
         with st.spinner("Thinking..."):
@@ -205,7 +218,7 @@ with tab_chat:
         st.experimental_rerun()
 
 # =========================================================
-# ✨ FOOTER
+# FOOTER
 # =========================================================
 st.markdown(
     """
