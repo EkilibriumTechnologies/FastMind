@@ -2,29 +2,33 @@ import os
 import time
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 from openai import OpenAI
 
 # --- Optional RAG Support ---
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_openai import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
+try:
+    from langchain_community.document_loaders import PyPDFLoader
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+    from langchain_openai import OpenAIEmbeddings
+    from langchain_community.vectorstores import Chroma
+    HAS_LANGCHAIN = True
+except Exception:
+    HAS_LANGCHAIN = False
 
-# Ensure Streamlit binds to Render's dynamic port
-port = int(os.environ.get("PORT", 10000))
-st.set_page_config(page_title="FastMind", layout="centered")
-
+# ==============================================================
 # 🧠 CONFIGURATION
 # ==============================================================
+# Bind Streamlit to Render’s dynamic port
+os.environ["PORT"] = os.environ.get("PORT", "10000")
+
 st.set_page_config(page_title="FastMind", layout="centered")
 st.title("🧠 FastMind – AI Fasting Tracker")
 st.markdown(
     "Your personal AI fasting coach and wellness companion — powered by Ekilibrium Technologies."
 )
 
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
 # ==============================================================
 # 📊 LOAD FASTING DATA
@@ -35,29 +39,25 @@ def load_fasting_data():
 
 data = load_fasting_data()
 
-
 def get_phase(hours):
     phase = data[(data["fase_inicio_h"] <= hours) & (data["fase_fin_h"] > hours)]
     if phase.empty:
         return data.iloc[-1]
     return phase.iloc[0]
 
-
+# ==============================================================
+# 📈 DIAL DRAWER
+# ==============================================================
 def draw_dial(hours, total=120):
     """Display circular fasting progress with smooth animation."""
-    import numpy as np
-    import plotly.graph_objects as go
-    from time import sleep
-
     phase = get_phase(hours)
     color = phase["color_hex"]
-    pct = (hours / total) * 100
+    pct = min((hours / total) * 100, 100)
     label = f"{int(hours)}h {(hours % 1) * 60:.0f}m"
 
-    # Create base figure
     fig = go.Figure(
         go.Pie(
-            values=[0.0001, 99.9999],  # start empty
+            values=[pct, 100 - pct],
             hole=0.7,
             marker_colors=[color, "#E0E0E0"],
             textinfo="none",
@@ -85,22 +85,15 @@ def draw_dial(hours, total=120):
         ],
     )
 
-    # Smooth fill animation (20 frames)
-    steps = np.linspace(0.0001, pct, 20)
-    for step in steps:
-        fig.data[0].values = [step, 100 - step]
-        st.plotly_chart(fig, use_container_width=True)
-        sleep(0.05)
-
+    st.plotly_chart(fig, use_container_width=True)
     return fig, phase
-
 
 # ==============================================================
 # 📚 OPTIONAL KNOWLEDGE BASE (PDF)
 # ==============================================================
-@st.cache_resource
+@st.cache_resource(show_spinner=False)
 def load_knowledge_base():
-    if os.path.exists("fasting_guide.pdf"):
+    if HAS_LANGCHAIN and os.path.exists("fasting_guide.pdf"):
         loader = PyPDFLoader("fasting_guide.pdf")
         docs = loader.load()
         splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
@@ -110,9 +103,7 @@ def load_knowledge_base():
         return db.as_retriever(search_kwargs={"k": 3})
     return None
 
-
 retriever = load_knowledge_base()
-
 
 # ==============================================================
 # 💬 ASK FASTMIND
@@ -125,33 +116,34 @@ def ask_fastmind(question, hours):
         docs = retriever.invoke(question)
         kb_text = "\n\n".join(d.page_content for d in docs)
 
+    # fixed triple-quote structure (previous code broke here)
     context = f"""
-    You are FastMind, a scientific fasting and wellness coach.
-    Current fasting phase: {phase['keyword']}
-    Description: {phase['description']}
-    What to eat: {phase['what_to_eat']}
-    Common symptoms: {phase['symptoms']}
-    Recommendations: {phase['recommendations']}
-    Tip: {phase['tip']}
-    """
+You are FastMind, a scientific fasting and wellness coach.
 
+Current fasting phase: {phase['keyword']}
+Description: {phase['description']}
+What to eat: {phase['what_to_eat']}
+Common symptoms: {phase['symptoms']}
+Recommendations: {phase['recommendations']}
+Tip: {phase['tip']}
 
-    Reference knowledge base (if available):
-    {kb_text}
-    """
+Reference knowledge base (if available):
+{kb_text}
+"""
 
     messages = [
         {
             "role": "system",
-            "content": "Be a science-based, motivational fasting coach. "
-                       "Combine clarity, empathy, and data.",
+            "content": "Be a science-based, motivational fasting coach. Combine clarity, empathy, and data.",
         },
         {"role": "user", "content": f"{context}\nUser question: {question}"},
     ]
 
-    response = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
-    return response.choices[0].message.content
-
+    try:
+        response = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"⚠️ Error while generating response: {e}"
 
 # ==============================================================
 # 🕒 FASTING TIMER LOGIC
@@ -175,29 +167,17 @@ if st.session_state.start_time:
     elapsed_hours = (time.time() - st.session_state.start_time) / 3600
     fig, phase = draw_dial(elapsed_hours)
 
-    # --- Center the dial visually ---
-    st.markdown("<div style='text-align:center;'>", unsafe_allow_html=True)
-    st.plotly_chart(fig, use_container_width=True,key=f"dial_{int(elapsed_hours)}")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # --- Center phase info ---
-    st.markdown(
-        f"<h3 style='text-align:center;'>🌙 Phase: {phase['keyword']}</h3>",
-        unsafe_allow_html=True
-    )
+    st.markdown(f"<h3 style='text-align:center;'>🌙 Phase: {phase['keyword']}</h3>", unsafe_allow_html=True)
     st.markdown(
         f"<p style='text-align:center; font-size:18px; color:#4A4A4A;'>{phase['tip']}</p>",
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
-    # --- Timer auto-refresh ---
     if st.session_state.running:
         time.sleep(3)
         st.rerun()
 else:
-    st.write("Press ▶️ **Start** to begin tracking your fast.")
-
-
+    st.info("Press ▶️ **Start** to begin tracking your fast.")
 
 # ==============================================================
 # 💬 CHAT SECTION
@@ -206,25 +186,20 @@ st.divider()
 st.subheader("💬 Ask FastMind")
 question = st.text_input("Ask a question about fasting, hydration, or mindset:")
 if st.button("Ask"):
-    hours = (
-        (time.time() - st.session_state.start_time) / 3600
-        if st.session_state.start_time
-        else 0
-    )
+    hours = ((time.time() - st.session_state.start_time) / 3600) if st.session_state.start_time else 0
     with st.spinner("Thinking..."):
         answer = ask_fastmind(question, hours)
     st.success(answer)
-
 
 # ==============================================================
 # ✨ FOOTER
 # ==============================================================
 st.markdown(
     """
-    ---
-    <div style='text-align:center;'>
-        <small>Powered by <b>Ekilibrium Technologies</b> | Built with Streamlit & OpenAI</small>
-    </div>
-    """,
+---
+<div style='text-align:center;'>
+    <small>Powered by <b>Ekilibrium Technologies</b> | Built with Streamlit & OpenAI</small>
+</div>
+""",
     unsafe_allow_html=True,
 )
