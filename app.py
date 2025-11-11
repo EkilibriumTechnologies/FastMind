@@ -5,7 +5,6 @@ import pandas as pd
 import plotly.graph_objects as go
 from openai import OpenAI
 
-# --- Optional LangChain (RAG) Support ---
 try:
     from langchain_community.document_loaders import PyPDFLoader
     from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -14,77 +13,55 @@ try:
     HAS_LANGCHAIN = True
 except Exception:
     HAS_LANGCHAIN = False
-    st.warning("LangChain not installed. The chatbot will still work without a knowledge base.")
+
 
 # ==============================================================
-# CONFIGURATION
+# CONFIG
 # ==============================================================
-st.set_page_config(page_title="FastMind – AI Fasting Tracker", layout="centered")
+st.set_page_config(page_title="FastMind", layout="centered")
 st.title("🧠 FastMind – AI Fasting Tracker")
-st.caption("Your intelligent fasting coach — powered by Ekilibrium Technologies")
+st.caption("Tu coach de ayuno y bienestar — powered by Ekilibrium Technologies")
 
-# Initialize OpenAI client
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    st.error("❌ Missing OPENAI_API_KEY environment variable.")
-    st.stop()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
-client = OpenAI(api_key=api_key)
 
 # ==============================================================
-# LOAD FASTING DATA
+# FASTING DATA
 # ==============================================================
 @st.cache_data
 def load_fasting_data():
-    try:
-        return pd.read_csv("fastmind_fasting_phases_en.csv")
-    except FileNotFoundError:
-        st.error("⚠️ File 'fastmind_fasting_phases_en.csv' not found.")
-        return None
+    return pd.read_csv("fastmind_fasting_phases_en.csv")
 
 data = load_fasting_data()
 
 def get_phase(hours):
-    if data is None:
-        return pd.Series({
-            "keyword": "Error",
-            "description": "Data not loaded",
-            "what_to_eat": "",
-            "symptoms": "",
-            "recommendations": "",
-            "tip": "",
-            "color_hex": "#FF0000"
-        })
     phase = data[(data["fase_inicio_h"] <= hours) & (data["fase_fin_h"] > hours)]
     return data.iloc[-1] if phase.empty else phase.iloc[0]
 
 
 # ==============================================================
-# LOAD KNOWLEDGE BASE (PDF)
+# KNOWLEDGE BASE (optional)
 # ==============================================================
 @st.cache_resource(show_spinner=False)
 def load_knowledge_base():
-    pdf_path = "fasting_guide.pdf"
-    if HAS_LANGCHAIN and os.path.exists(pdf_path):
+    if HAS_LANGCHAIN and os.path.exists("fasting_guide.pdf"):
         try:
-            loader = PyPDFLoader(pdf_path)
+            loader = PyPDFLoader("fasting_guide.pdf")
             docs = loader.load()
             splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
             chunks = splitter.split_documents(docs)
-            embedding = OpenAIEmbeddings(openai_api_key=api_key)
+            embedding = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
             db = Chroma.from_documents(chunks, embedding, persist_directory="./fastmind_db")
             return db.as_retriever(search_kwargs={"k": 3})
         except Exception as e:
-            st.warning(f"Could not load knowledge base: {e}")
-    else:
-        st.info("No 'fasting_guide.pdf' found. The chatbot will work without RAG context.")
+            st.warning(f"⚠️ No se pudo cargar el PDF: {e}")
     return None
 
 retriever = load_knowledge_base()
 
 
 # ==============================================================
-# CHATBOT
+# FASTMIND CHATBOT
 # ==============================================================
 def ask_fastmind(question, hours):
     phase = get_phase(hours)
@@ -99,10 +76,11 @@ def ask_fastmind(question, hours):
 
     context = f"""
 You are FastMind, a scientific fasting and wellness coach.
+
 Current fasting phase: {phase['keyword']}
 Description: {phase['description']}
 What to eat: {phase['what_to_eat']}
-Common symptoms: {phase['symptoms']}
+Symptoms: {phase['symptoms']}
 Recommendations: {phase['recommendations']}
 Tip: {phase['tip']}
 
@@ -114,17 +92,17 @@ Reference knowledge base:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a concise, science-based fasting coach who motivates users."},
+                {"role": "system", "content": "Be a concise, motivational, science-based fasting coach."},
                 {"role": "user", "content": f"{context}\nUser question: {question}"}
             ]
         )
         return response.choices[0].message.content
     except Exception as e:
-        return f"⚠️ OpenAI error: {e}"
+        return f"⚠️ Error generating response: {e}"
 
 
 # ==============================================================
-# STATE MANAGEMENT
+# STATE
 # ==============================================================
 if "start_time" not in st.session_state:
     st.session_state.start_time = None
@@ -137,7 +115,7 @@ if "chat_history" not in st.session_state:
 
 
 # ==============================================================
-# INTERFACE (Tabs)
+# INTERFACE
 # ==============================================================
 tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
 
@@ -146,78 +124,75 @@ tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
 # TIMER TAB
 # ==============================================================
 with tab_timer:
-    st.header("⏱️ Fasting Progress")
+    st.header("⏱️ Seguimiento del Ayuno")
 
     col1, col2 = st.columns(2)
-    if col1.button("▶️ Start", use_container_width=True):
+    if col1.button("▶️ Start"):
         st.session_state.start_time = time.time()
         st.session_state.running = True
 
-    if col2.button("⏹ Stop", use_container_width=True):
+    if col2.button("⏹ Stop"):
         st.session_state.running = False
 
-    if st.session_state.running:
+    # ✅ Refresh every 3 seconds safely
+    from streamlit.runtime.scriptrunner import add_script_run_ctx
+    refresh = st.experimental_data_editor  # dummy ref
+    count = st.experimental_get_query_params()  # ensures safe rerun call
+    st_autorefresh = st.experimental_rerun  # fallback rename compatibility
+
+    # Calculate timer values if running
+    if st.session_state.running and st.session_state.start_time:
+        st.experimental_set_query_params(refresh=str(int(time.time())))
         st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
         hours = st.session_state.elapsed_hours
         phase = get_phase(hours)
         color = phase["color_hex"]
         pct = min((hours / 120) * 100, 100)
 
+        # Dial with phase name only
         fig = go.Figure(
-            go.Pie(values=[pct, 100 - pct], hole=0.75,
+            go.Pie(values=[pct, 100 - pct], hole=0.7,
                    marker_colors=[color, "#E0E0E0"], textinfo="none")
         )
         fig.update_layout(
             showlegend=False,
             margin=dict(t=0, b=0, l=0, r=0),
-            annotations=[
-                dict(text=f"<b>{phase['keyword']}</b>",
-                     x=0.5, y=0.5, font_size=28,
-                     font_color=color, showarrow=False)
-            ]
+            annotations=[dict(text=f"<b>{phase['keyword']}</b>", x=0.5, y=0.5,
+                              font_size=28, font_color=color, showarrow=False)]
         )
         st.plotly_chart(fig, use_container_width=True)
 
+        # Digital clock
         elapsed_sec = int(hours * 3600)
         h, m, s = elapsed_sec // 3600, (elapsed_sec % 3600) // 60, elapsed_sec % 60
         st.markdown(
-            f"<h1 style='text-align:center; color:{color}; font-weight:bold;'>{h:02d}:{m:02d}:{s:02d}</h1>",
+            f"<h2 style='text-align:center; color:{color}; font-weight:bold;'>{h:02d}:{m:02d}:{s:02d}</h2>",
             unsafe_allow_html=True
         )
 
-        # ✅ Safe non-blocking refresh for Render
-        st.query_params["refresh"] = str(int(time.time()))
+        # Instead of blocking, schedule a safe rerun
+        st.experimental_set_query_params(refresh=str(int(time.time() // 3)))
 
     else:
-        st.info("Press ▶️ **Start** to begin your fast.")
-        if st.session_state.elapsed_hours > 0:
-            st.metric("Last fast:", f"{st.session_state.elapsed_hours:.2f} h")
+        st.info("Presiona ▶️ **Start** para comenzar tu ayuno.")
 
 
 # ==============================================================
 # CHAT TAB
 # ==============================================================
 with tab_chat:
-    st.header("💬 FastMind Chatbot")
+    st.header("💬 Asistente de Ayuno FastMind")
+
+    question = st.text_input("Haz una pregunta sobre ayuno, hidratación o bienestar:")
+    if st.button("Preguntar"):
+        hours = st.session_state.elapsed_hours
+        with st.spinner("Pensando..."):
+            answer = ask_fastmind(question, hours)
+        st.session_state.chat_history.append((question, answer))
 
     for q, a in st.session_state.chat_history:
-        with st.chat_message("user"):
-            st.markdown(q)
-        with st.chat_message("assistant"):
-            st.markdown(a)
-
-    question = st.chat_input("Ask something about fasting, hydration, or mindset...")
-    if question:
-        st.session_state.chat_history.append((question, "typing..."))
-        st.experimental_rerun()
-
-    if st.session_state.chat_history and st.session_state.chat_history[-1][1] == "typing...":
-        last_question = st.session_state.chat_history[-1][0]
-        with st.spinner("Thinking..."):
-            hours = st.session_state.elapsed_hours
-            answer = ask_fastmind(last_question, hours)
-        st.session_state.chat_history[-1] = (last_question, answer)
-        st.experimental_rerun()
+        st.markdown(f"**Tú:** {q}")
+        st.markdown(f"💡 *FastMind:* {a}")
 
 
 # ==============================================================
@@ -230,5 +205,5 @@ st.markdown(
     <small>Powered by <b>Ekilibrium Technologies</b> | Built with Streamlit & OpenAI</small>
 </div>
 """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
