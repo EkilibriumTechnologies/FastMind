@@ -42,7 +42,7 @@ def get_phase(hours):
 
 
 # ==============================================================
-# 📚 BASE DE CONOCIMIENTO (PDF)
+# 📚 BASE DE CONOCIMIENTO
 # ==============================================================
 @st.cache_resource(show_spinner=False)
 def load_knowledge_base():
@@ -103,7 +103,7 @@ Reference knowledge base:
 
 
 # ==============================================================
-# 🕒 ESTADO GLOBAL
+# 🕒 ESTADO
 # ==============================================================
 if "start_time" not in st.session_state:
     st.session_state.start_time = None
@@ -116,20 +116,9 @@ if "chat_history" not in st.session_state:
 
 
 # ==============================================================
-# 🧵 HILO DEL TIMER
-# ==============================================================
-def run_timer():
-    """Actualiza el contador en segundo plano."""
-    while st.session_state.running:
-        st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
-        time.sleep(1)
-
-
-# ==============================================================
 # 🌗 INTERFAZ CON DOS TABS
 # ==============================================================
 tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
-
 
 # ==============================================================
 # ⏱️ TIMER TAB
@@ -141,30 +130,26 @@ with tab_timer:
     if col1.button("▶️ Start"):
         st.session_state.start_time = time.time()
         st.session_state.running = True
-        thread = threading.Thread(target=run_timer, daemon=True)
-        thread.start()
 
     if col2.button("⏹ Stop"):
         st.session_state.running = False
 
-    # 🔁 Redibujar cada 3 s mientras el timer corre
-    if st.session_state.running:
-        time.sleep(3)
-        st.rerun()
+    dial_placeholder = st.empty()
+    info_placeholder = st.empty()
 
-    if st.session_state.start_time:
-        phase = get_phase(st.session_state.elapsed_hours)
+    # Mientras esté corriendo el ayuno, actualiza cada segundo
+    while st.session_state.running:
+        st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
+        hours = st.session_state.elapsed_hours
+        phase = get_phase(hours)
         color = phase["color_hex"]
-        pct = min((st.session_state.elapsed_hours / 120) * 100, 100)
-        label = f"{int(st.session_state.elapsed_hours)}h {(st.session_state.elapsed_hours % 1)*60:.0f}m"
+        pct = min((hours / 120) * 100, 100)
+        label = f"{int(hours)}h {(hours % 1)*60:.0f}m"
 
+        # Dial dinámico
         fig = go.Figure(
-            go.Pie(
-                values=[pct, 100 - pct],
-                hole=0.7,
-                marker_colors=[color, "#E0E0E0"],
-                textinfo="none"
-            )
+            go.Pie(values=[pct, 100 - pct], hole=0.7,
+                   marker_colors=[color, "#E0E0E0"], textinfo="none")
         )
         fig.update_layout(
             showlegend=False,
@@ -176,24 +161,19 @@ with tab_timer:
                      font_size=16, showarrow=False)
             ]
         )
-        st.plotly_chart(fig, use_container_width=True)
-        st.markdown(
-            f"<h3 style='text-align:center;'>🌙 {phase['keyword']}</h3>",
-            unsafe_allow_html=True
-        )
-        st.markdown(
-            f"<p style='text-align:center; color:#4A4A4A;'>{phase['tip']}</p>",
-            unsafe_allow_html=True
-        )
 
-        # Reloj digital
-        elapsed_sec = int(st.session_state.elapsed_hours * 3600)
+        # Actualizar visual sin recargar la app
+        dial_placeholder.plotly_chart(fig, use_container_width=True)
+        elapsed_sec = int(hours * 3600)
         h, m, s = elapsed_sec // 3600, (elapsed_sec % 3600) // 60, elapsed_sec % 60
-        st.markdown(
+        info_placeholder.markdown(
             f"<h2 style='text-align:center; color:{color};'>{h:02d}:{m:02d}:{s:02d}</h2>",
             unsafe_allow_html=True
         )
-    else:
+        time.sleep(1)
+
+    # Si no está corriendo
+    if not st.session_state.running:
         st.info("Presiona ▶️ **Start** para comenzar tu ayuno.")
 
 
@@ -202,7 +182,6 @@ with tab_timer:
 # ==============================================================
 with tab_chat:
     st.header("💬 Asistente de Ayuno FastMind")
-
     question = st.text_input("Haz una pregunta sobre ayuno, hidratación o bienestar:")
     if st.button("Preguntar"):
         hours = st.session_state.elapsed_hours
