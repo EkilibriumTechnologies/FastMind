@@ -1,6 +1,5 @@
 import os
 import time
-import threading
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -42,7 +41,7 @@ def get_phase(hours):
 
 
 # ==============================================================
-# 📚 KNOWLEDGE BASE
+# 📚 BASE DE CONOCIMIENTO (PDF)
 # ==============================================================
 @st.cache_resource(show_spinner=False)
 def load_knowledge_base():
@@ -103,7 +102,7 @@ Reference knowledge base:
 
 
 # ==============================================================
-# 🕒 ESTADO
+# 🕒 ESTADO GLOBAL
 # ==============================================================
 if "start_time" not in st.session_state:
     st.session_state.start_time = None
@@ -135,42 +134,49 @@ with tab_timer:
     if col2.button("⏹ Stop"):
         st.session_state.running = False
 
-    dial_placeholder = st.empty()
-    info_placeholder = st.empty()
-
-    # Timer loop
-    while st.session_state.running:
+    if st.session_state.running and st.session_state.start_time:
         st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
         hours = st.session_state.elapsed_hours
         phase = get_phase(hours)
         color = phase["color_hex"]
         pct = min((hours / 120) * 100, 100)
 
-        # Dial only shows phase name in the center now
+        # --- Dial showing phase name in center ---
         fig = go.Figure(
-            go.Pie(values=[pct, 100 - pct], hole=0.7,
-                   marker_colors=[color, "#E0E0E0"], textinfo="none")
+            go.Pie(
+                values=[pct, 100 - pct],
+                hole=0.7,
+                marker_colors=[color, "#E0E0E0"],
+                textinfo="none"
+            )
         )
         fig.update_layout(
             showlegend=False,
             margin=dict(t=0, b=0, l=0, r=0),
             annotations=[
-                dict(text=f"<b>{phase['keyword']}</b>", x=0.5, y=0.5,
-                     font_size=28, font_color=color, showarrow=False)
+                dict(
+                    text=f"<b>{phase['keyword']}</b>",
+                    x=0.5, y=0.5,
+                    font_size=28, font_color=color,
+                    showarrow=False
+                )
             ]
         )
+        st.plotly_chart(fig, use_container_width=True)
 
-        dial_placeholder.plotly_chart(fig, use_container_width=True)
-
+        # --- Digital clock below ---
         elapsed_sec = int(hours * 3600)
         h, m, s = elapsed_sec // 3600, (elapsed_sec % 3600) // 60, elapsed_sec % 60
-        info_placeholder.markdown(
+        st.markdown(
             f"<h2 style='text-align:center; color:{color}; font-weight:bold;'>{h:02d}:{m:02d}:{s:02d}</h2>",
             unsafe_allow_html=True
         )
-        time.sleep(1)
 
-    if not st.session_state.running:
+        # --- Auto-refresh every 3 seconds ---
+        time.sleep(3)
+        st.rerun()
+
+    else:
         st.info("Presiona ▶️ **Start** para comenzar tu ayuno.")
 
 
@@ -179,6 +185,7 @@ with tab_timer:
 # ==============================================================
 with tab_chat:
     st.header("💬 Asistente de Ayuno FastMind")
+
     question = st.text_input("Haz una pregunta sobre ayuno, hidratación o bienestar:")
     if st.button("Preguntar"):
         hours = st.session_state.elapsed_hours
