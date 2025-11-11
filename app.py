@@ -22,14 +22,13 @@ except Exception:
 # 🧠 CONFIG
 # ==============================================================
 st.set_page_config(page_title="FastMind", layout="centered")
-st.title("🧠 FastMind – AI Fasting Tracker")
-st.caption("Tu coach de ayuno inteligente — powered by Ekilibrium Technologies")
-
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
+st.title("🧠 FastMind – AI Fasting Tracker")
+st.caption("Tu coach de ayuno y bienestar — powered by Ekilibrium Technologies")
 
 
 # ==============================================================
-# 📊 DATOS DE FASES DE AYUNO
+# 📊 DATOS DE FASES
 # ==============================================================
 @st.cache_data
 def load_fasting_data():
@@ -43,39 +42,10 @@ def get_phase(hours):
 
 
 # ==============================================================
-# ⏳ DIAL DE PROGRESO
-# ==============================================================
-def draw_dial(hours, total=120):
-    phase = get_phase(hours)
-    color = phase["color_hex"]
-    pct = min((hours / total) * 100, 100)
-    label = f"{int(hours)}h {(hours % 1)*60:.0f}m"
-
-    fig = go.Figure(
-        go.Pie(
-            values=[pct, 100 - pct],
-            hole=0.7,
-            marker_colors=[color, "#E0E0E0"],
-            textinfo="none",
-        )
-    )
-    fig.update_layout(
-        showlegend=False,
-        margin=dict(t=0, b=0, l=0, r=0),
-        annotations=[
-            dict(text=label, x=0.5, y=0.5, font_size=26, font_color=color, showarrow=False),
-            dict(text=phase["keyword"], x=0.5, y=0.37, font_size=16, showarrow=False),
-        ],
-    )
-    return fig, phase
-
-
-# ==============================================================
 # 📚 BASE DE CONOCIMIENTO (PDF)
 # ==============================================================
 @st.cache_resource(show_spinner=False)
 def load_knowledge_base():
-    """Carga la guía PDF en la base vectorial."""
     if HAS_LANGCHAIN and os.path.exists("fasting_guide.pdf"):
         try:
             loader = PyPDFLoader("fasting_guide.pdf")
@@ -86,14 +56,14 @@ def load_knowledge_base():
             db = Chroma.from_documents(chunks, embedding, persist_directory="./fastmind_db")
             return db.as_retriever(search_kwargs={"k": 3})
         except Exception as e:
-            st.warning(f"No se pudo cargar el PDF: {e}")
+            st.warning(f"⚠️ No se pudo cargar el PDF: {e}")
     return None
 
 retriever = load_knowledge_base()
 
 
 # ==============================================================
-# 💬 CHAT FASTMIND (RAG + GPT fallback)
+# 💬 FUNCIÓN DE CHAT
 # ==============================================================
 def ask_fastmind(question, hours):
     phase = get_phase(hours)
@@ -134,7 +104,7 @@ Reference knowledge base:
 
 
 # ==============================================================
-# 🕒 TIMER STATE
+# 🕒 ESTADO DEL TIMER
 # ==============================================================
 if "start_time" not in st.session_state:
     st.session_state.start_time = None
@@ -147,68 +117,82 @@ if "chat_history" not in st.session_state:
 
 
 # ==============================================================
-# 🧵 TIMER THREAD
+# 🧵 HILO TIMER
 # ==============================================================
 def run_timer():
-    """Actualiza el tiempo de ayuno en segundo plano."""
     while st.session_state.running:
         st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
         time.sleep(1)
 
 
 # ==============================================================
-# 🎛 CONTROLES DE TIMER
+# 🌗 UI CON DOS AGENTES SEPARADOS
 # ==============================================================
-col1, col2 = st.columns(2)
-if col1.button("▶️ Start"):
-    st.session_state.start_time = time.time()
-    st.session_state.running = True
-    thread = threading.Thread(target=run_timer, daemon=True)
-    thread.start()
-
-if col2.button("⏹ Stop"):
-    st.session_state.running = False
+tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
 
 
-# ==============================================================
-# 🔄 REFRESCO AUTOMÁTICO
-# ==============================================================
-if st.session_state.running:
-    try:
-        from streamlit_autorefresh import st_autorefresh
-        st_autorefresh(interval=3000, key="fastmind_timer_refresh")
-    except Exception:
-        pass
+# ---------------- TIMER AGENT ----------------
+with tab_timer:
+    st.header("⏱️ Seguimiento de Ayuno")
+    col1, col2 = st.columns(2)
+    if col1.button("▶️ Start", key="start_timer"):
+        st.session_state.start_time = time.time()
+        st.session_state.running = True
+        thread = threading.Thread(target=run_timer, daemon=True)
+        thread.start()
+
+    if col2.button("⏹ Stop", key="stop_timer"):
+        st.session_state.running = False
+
+    # Dial visualization
+    if st.session_state.start_time:
+        phase = get_phase(st.session_state.elapsed_hours)
+        color = phase["color_hex"]
+        pct = min((st.session_state.elapsed_hours / 120) * 100, 100)
+        label = f"{int(st.session_state.elapsed_hours)}h {(st.session_state.elapsed_hours % 1)*60:.0f}m"
+
+        fig = go.Figure(
+            go.Pie(
+                values=[pct, 100 - pct],
+                hole=0.7,
+                marker_colors=[color, "#E0E0E0"],
+                textinfo="none",
+            )
+        )
+        fig.update_layout(
+            showlegend=False,
+            margin=dict(t=0, b=0, l=0, r=0),
+            annotations=[
+                dict(text=label, x=0.5, y=0.5, font_size=26, font_color=color, showarrow=False),
+                dict(text=phase["keyword"], x=0.5, y=0.37, font_size=16, showarrow=False),
+            ],
+        )
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown(f"<h3 style='text-align:center;'>🌙 {phase['keyword']}</h3>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align:center; color:#4A4A4A;'>{phase['tip']}</p>", unsafe_allow_html=True)
+
+        # Refresh dial automatically every 3 seconds
+        if st.session_state.running:
+            time.sleep(3)
+            st.experimental_rerun()
+    else:
+        st.info("Presiona ▶️ **Start** para comenzar tu ayuno.")
 
 
-# ==============================================================
-# 🎯 MOSTRAR DIAL
-# ==============================================================
-if st.session_state.start_time:
-    fig, phase = draw_dial(st.session_state.elapsed_hours)
-    st.plotly_chart(fig, use_container_width=True)
-    st.markdown(f"<h3 style='text-align:center;'>🌙 {phase['keyword']}</h3>", unsafe_allow_html=True)
-    st.markdown(f"<p style='text-align:center; color:#4A4A4A;'>{phase['tip']}</p>", unsafe_allow_html=True)
-else:
-    st.info("Presiona ▶️ **Start** para comenzar tu ayuno.")
+# ---------------- CHAT AGENT ----------------
+with tab_chat:
+    st.header("💬 Asistente de Ayuno FastMind")
 
+    question = st.text_input("Haz una pregunta sobre ayuno, hidratación o bienestar:")
+    if st.button("Preguntar", key="ask_button"):
+        hours = st.session_state.elapsed_hours
+        with st.spinner("Pensando..."):
+            answer = ask_fastmind(question, hours)
+        st.session_state.chat_history.append((question, answer))
 
-# ==============================================================
-# 💬 CHAT
-# ==============================================================
-st.divider()
-st.subheader("💬 Ask FastMind")
-
-question = st.text_input("Ask about fasting, hydration, or mindset:")
-if st.button("Ask"):
-    hours = st.session_state.elapsed_hours
-    with st.spinner("Thinking..."):
-        answer = ask_fastmind(question, hours)
-    st.session_state.chat_history.append((question, answer))
-
-for q, a in st.session_state.chat_history:
-    st.markdown(f"**You:** {q}")
-    st.markdown(f"💡 *FastMind:* {a}")
+    for q, a in st.session_state.chat_history:
+        st.markdown(f"**Tú:** {q}")
+        st.markdown(f"💡 *FastMind:* {a}")
 
 
 # ==============================================================
