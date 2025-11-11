@@ -19,7 +19,7 @@ except Exception:
 
 
 # ==============================================================
-# 🧠 CONFIG
+# 🧠 CONFIGURACIÓN
 # ==============================================================
 st.set_page_config(page_title="FastMind", layout="centered")
 st.title("🧠 FastMind – AI Fasting Tracker")
@@ -29,24 +29,27 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
 
 # ==============================================================
-# 📊 DATOS DE FASES
+# 📊 DATOS DE FASES DE AYUNO
 # ==============================================================
 @st.cache_data
 def load_fasting_data():
+    """Carga el archivo CSV con las fases de ayuno."""
     return pd.read_csv("fastmind_fasting_phases_en.csv")
 
 data = load_fasting_data()
 
 def get_phase(hours):
+    """Devuelve la fase correspondiente a las horas transcurridas."""
     phase = data[(data["fase_inicio_h"] <= hours) & (data["fase_fin_h"] > hours)]
     return data.iloc[-1] if phase.empty else phase.iloc[0]
 
 
 # ==============================================================
-# 📚 KNOWLEDGE BASE (PDF)
+# 📚 BASE DE CONOCIMIENTO (PDF RAG)
 # ==============================================================
 @st.cache_resource(show_spinner=False)
 def load_knowledge_base():
+    """Carga el PDF de conocimiento si existe."""
     if HAS_LANGCHAIN and os.path.exists("fasting_guide.pdf"):
         try:
             loader = PyPDFLoader("fasting_guide.pdf")
@@ -64,9 +67,10 @@ retriever = load_knowledge_base()
 
 
 # ==============================================================
-# 💬 CHAT (RAG + GPT fallback)
+# 💬 CHAT FASTMIND (RAG + GPT fallback)
 # ==============================================================
 def ask_fastmind(question, hours):
+    """Responde la pregunta usando RAG o GPT como fallback."""
     phase = get_phase(hours)
     kb_text = ""
 
@@ -105,7 +109,7 @@ Reference knowledge base:
 
 
 # ==============================================================
-# 🕒 ESTADO GLOBAL
+# 🕒 ESTADO GLOBAL DEL TIMER Y CHAT
 # ==============================================================
 if "start_time" not in st.session_state:
     st.session_state.start_time = None
@@ -118,22 +122,25 @@ if "chat_history" not in st.session_state:
 
 
 # ==============================================================
-# 🧵 TIMER BACKGROUND THREAD
+# 🧵 HILO BACKGROUND DEL TIMER
 # ==============================================================
 def run_timer():
+    """Hilo en segundo plano que actualiza el tiempo sin bloquear la UI."""
     while st.session_state.running:
         st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
         time.sleep(1)
 
 
 # ==============================================================
-# 🌗 UI: DOS SECCIONES SEPARADAS
+# 🌗 INTERFAZ SEPARADA EN DOS TABS
 # ==============================================================
 tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
 
-# ---------------- TIMER ----------------
+# ==============================================================
+# ⏱️ TIMER AGENT
+# ==============================================================
 with tab_timer:
-    st.header("⏱️ Seguimiento de Ayuno")
+    st.header("⏱️ Seguimiento del Ayuno")
 
     col1, col2 = st.columns(2)
     if col1.button("▶️ Start"):
@@ -152,26 +159,35 @@ with tab_timer:
         label = f"{int(st.session_state.elapsed_hours)}h {(st.session_state.elapsed_hours % 1)*60:.0f}m"
 
         fig = go.Figure(
-            go.Pie(values=[pct, 100 - pct], hole=0.7,
-                   marker_colors=[color, "#E0E0E0"], textinfo="none")
+            go.Pie(
+                values=[pct, 100 - pct],
+                hole=0.7,
+                marker_colors=[color, "#E0E0E0"],
+                textinfo="none",
+            )
         )
-        fig.update_layout(showlegend=False, margin=dict(t=0,b=0,l=0,r=0),
-                          annotations=[
-                              dict(text=label, x=0.5, y=0.5, font_size=26,
-                                   font_color=color, showarrow=False),
-                              dict(text=phase["keyword"], x=0.5, y=0.37,
-                                   font_size=16, showarrow=False)
-                          ])
+        fig.update_layout(
+            showlegend=False,
+            margin=dict(t=0, b=0, l=0, r=0),
+            annotations=[
+                dict(text=label, x=0.5, y=0.5, font_size=26, font_color=color, showarrow=False),
+                dict(text=phase["keyword"], x=0.5, y=0.37, font_size=16, showarrow=False),
+            ],
+        )
         st.plotly_chart(fig, use_container_width=True)
         st.markdown(f"<h3 style='text-align:center;'>🌙 {phase['keyword']}</h3>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align:center; color:#4A4A4A;'>{phase['tip']}</p>", unsafe_allow_html=True)
+        # No hay bucles ni rerun
     else:
         st.info("Presiona ▶️ **Start** para comenzar tu ayuno.")
 
 
-# ---------------- CHAT ----------------
+# ==============================================================
+# 💬 CHAT AGENT
+# ==============================================================
 with tab_chat:
     st.header("💬 Asistente de Ayuno FastMind")
+
     question = st.text_input("Haz una pregunta sobre ayuno, hidratación o bienestar:")
     if st.button("Preguntar"):
         hours = st.session_state.elapsed_hours
