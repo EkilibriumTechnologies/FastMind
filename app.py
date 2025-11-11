@@ -19,7 +19,7 @@ except Exception:
 
 
 # ==============================================================
-# 🧠 CONFIGURACIÓN
+# 🧠 CONFIG
 # ==============================================================
 st.set_page_config(page_title="FastMind", layout="centered")
 st.title("🧠 FastMind – AI Fasting Tracker")
@@ -29,7 +29,7 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
 
 # ==============================================================
-# 📊 FASES DE AYUNO
+# 📊 DATOS DE FASES DE AYUNO
 # ==============================================================
 @st.cache_data
 def load_fasting_data():
@@ -71,18 +71,22 @@ def draw_dial(hours, total=120):
 
 
 # ==============================================================
-# 📚 KNOWLEDGE BASE (PDF)
+# 📚 BASE DE CONOCIMIENTO (PDF)
 # ==============================================================
 @st.cache_resource(show_spinner=False)
 def load_knowledge_base():
+    """Carga la guía PDF en la base vectorial."""
     if HAS_LANGCHAIN and os.path.exists("fasting_guide.pdf"):
-        loader = PyPDFLoader("fasting_guide.pdf")
-        docs = loader.load()
-        splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
-        chunks = splitter.split_documents(docs)
-        embedding = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
-        db = Chroma.from_documents(chunks, embedding, persist_directory="./fastmind_db")
-        return db.as_retriever(search_kwargs={"k": 3})
+        try:
+            loader = PyPDFLoader("fasting_guide.pdf")
+            docs = loader.load()
+            splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
+            chunks = splitter.split_documents(docs)
+            embedding = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+            db = Chroma.from_documents(chunks, embedding, persist_directory="./fastmind_db")
+            return db.as_retriever(search_kwargs={"k": 3})
+        except Exception as e:
+            st.warning(f"No se pudo cargar el PDF: {e}")
     return None
 
 retriever = load_knowledge_base()
@@ -143,9 +147,10 @@ if "chat_history" not in st.session_state:
 
 
 # ==============================================================
-# 🧵 HILO BACKGROUND DEL TIMER
+# 🧵 TIMER THREAD
 # ==============================================================
 def run_timer():
+    """Actualiza el tiempo de ayuno en segundo plano."""
     while st.session_state.running:
         st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
         time.sleep(1)
@@ -166,11 +171,14 @@ if col2.button("⏹ Stop"):
 
 
 # ==============================================================
-# 🔄 REFRESCO AUTOMÁTICO CADA 3 SEGUNDOS
+# 🔄 REFRESCO AUTOMÁTICO
 # ==============================================================
 if st.session_state.running:
-    time.sleep(3)
-    st.rerun()
+    try:
+        from streamlit_autorefresh import st_autorefresh
+        st_autorefresh(interval=3000, key="fastmind_timer_refresh")
+    except Exception:
+        pass
 
 
 # ==============================================================
