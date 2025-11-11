@@ -1,5 +1,5 @@
 streamlit==1.39.0
-streamlit-autorefresh
+pypdf
 pandas
 numpy
 plotly
@@ -9,4 +9,3 @@ langchain-community
 langchain-openai
 chromadb
 tiktoken
-pypdf
