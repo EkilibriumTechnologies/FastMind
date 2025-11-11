@@ -16,12 +16,9 @@ try:
 except Exception:
     HAS_LANGCHAIN = False
 
-except Exception:
-    HAS_LANGCHAIN = False
-
 
 # ==============================================================
-# 🧠 CONFIGURACIÓN
+# 🧠 CONFIG
 # ==============================================================
 st.set_page_config(page_title="FastMind", layout="centered")
 st.title("🧠 FastMind – AI Fasting Tracker")
@@ -29,24 +26,29 @@ st.caption("Tu coach de ayuno y bienestar — powered by Ekilibrium Technologies
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY", ""))
 
+
 # ==============================================================
 # 📊 FASES DE AYUNO
 # ==============================================================
 @st.cache_data
 def load_fasting_data():
+    """Carga las fases de ayuno desde el CSV."""
     return pd.read_csv("fastmind_fasting_phases_en.csv")
 
 data = load_fasting_data()
 
 def get_phase(hours):
+    """Obtiene la fase actual según las horas transcurridas."""
     phase = data[(data["fase_inicio_h"] <= hours) & (data["fase_fin_h"] > hours)]
     return data.iloc[-1] if phase.empty else phase.iloc[0]
+
 
 # ==============================================================
 # 📚 BASE DE CONOCIMIENTO (PDF)
 # ==============================================================
 @st.cache_resource(show_spinner=False)
 def load_knowledge_base():
+    """Carga el PDF con la guía si existe."""
     if HAS_LANGCHAIN and os.path.exists("fasting_guide.pdf"):
         try:
             loader = PyPDFLoader("fasting_guide.pdf")
@@ -62,12 +64,15 @@ def load_knowledge_base():
 
 retriever = load_knowledge_base()
 
+
 # ==============================================================
-# 💬 CHAT FASTMIND
+# 💬 CHATBOT FASTMIND
 # ==============================================================
 def ask_fastmind(question, hours):
+    """Consulta al agente con contexto y RAG opcional."""
     phase = get_phase(hours)
     kb_text = ""
+
     if retriever:
         try:
             docs = retriever.invoke(question)
@@ -101,6 +106,7 @@ Reference knowledge base:
     except Exception as e:
         return f"⚠️ Error generating response: {e}"
 
+
 # ==============================================================
 # 🕒 ESTADO GLOBAL
 # ==============================================================
@@ -113,31 +119,26 @@ if "elapsed_hours" not in st.session_state:
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+
 # ==============================================================
-# 🧵 TIMER EN SEGUNDO PLANO
+# 🧵 HILO DEL TIMER
 # ==============================================================
 def run_timer():
-    """Actualiza el tiempo sin bloquear la UI."""
+    """Actualiza el contador de horas sin bloquear la UI."""
     while st.session_state.running:
         st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
         time.sleep(1)
 
+
 # ==============================================================
-# 🌗 INTERFAZ CON DOS TABS
+# 🌗 INTERFAZ: DOS TABS SEPARADOS
 # ==============================================================
 tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
 
-# ==============================================================
-# ⏱️ TIMER TAB
-# ==============================================================
+
+# ---------------- TIMER TAB ----------------
 with tab_timer:
     st.header("⏱️ Seguimiento del Ayuno")
-
-    # Refresco nativo cada 3 segundos (solo cuando el timer está activo)
-    if st.session_state.running:
-        st.empty()  # placeholder seguro
-        time.sleep(3)
-        st.rerun()
 
     col1, col2 = st.columns(2)
     if col1.button("▶️ Start"):
@@ -172,14 +173,21 @@ with tab_timer:
         st.plotly_chart(fig, use_container_width=True)
         st.markdown(f"<h3 style='text-align:center;'>🌙 {phase['keyword']}</h3>", unsafe_allow_html=True)
         st.markdown(f"<p style='text-align:center; color:#4A4A4A;'>{phase['tip']}</p>", unsafe_allow_html=True)
+        # Mostrar reloj digital
+        elapsed_sec = int(st.session_state.elapsed_hours * 3600)
+        h, m, s = elapsed_sec // 3600, (elapsed_sec % 3600) // 60, elapsed_sec % 60
+        st.markdown(
+            f"<h2 style='text-align:center; color:{color};'>{h:02d}:{m:02d}:{s:02d}</h2>",
+            unsafe_allow_html=True
+        )
     else:
         st.info("Presiona ▶️ **Start** para comenzar tu ayuno.")
 
-# ==============================================================
-# 💬 CHAT TAB
-# ==============================================================
+
+# ---------------- CHAT TAB ----------------
 with tab_chat:
     st.header("💬 Asistente de Ayuno FastMind")
+
     question = st.text_input("Haz una pregunta sobre ayuno, hidratación o bienestar:")
     if st.button("Preguntar"):
         hours = st.session_state.elapsed_hours
@@ -190,6 +198,7 @@ with tab_chat:
     for q, a in st.session_state.chat_history:
         st.markdown(f"**Tú:** {q}")
         st.markdown(f"💡 *FastMind:* {a}")
+
 
 # ==============================================================
 # ✨ FOOTER
