@@ -16,6 +16,7 @@ try:
 except Exception:
     HAS_LANGCHAIN = False
 
+
 # ==============================================================
 # 🧠 CONFIGURACIÓN
 # ==============================================================
@@ -39,7 +40,7 @@ def get_phase(hours):
     return data.iloc[-1] if phase.empty else phase.iloc[0]
 
 # ==============================================================
-# 📚 BASE DE CONOCIMIENTO
+# 📚 BASE DE CONOCIMIENTO (PDF)
 # ==============================================================
 @st.cache_resource(show_spinner=False)
 def load_knowledge_base():
@@ -98,7 +99,7 @@ Reference knowledge base:
         return f"⚠️ Error generating response: {e}"
 
 # ==============================================================
-# 🕒 ESTADO
+# 🕒 ESTADO GLOBAL
 # ==============================================================
 if "start_time" not in st.session_state:
     st.session_state.start_time = None
@@ -113,12 +114,13 @@ if "chat_history" not in st.session_state:
 # 🧵 TIMER EN SEGUNDO PLANO
 # ==============================================================
 def run_timer():
+    """Actualiza el tiempo sin bloquear la UI."""
     while st.session_state.running:
         st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
         time.sleep(1)
 
 # ==============================================================
-# 🌗 INTERFAZ SEPARADA EN TABS
+# 🌗 INTERFAZ CON DOS TABS
 # ==============================================================
 tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
 
@@ -128,9 +130,11 @@ tab_timer, tab_chat = st.tabs(["⏱️ Fasting Timer", "💬 FastMind Chatbot"])
 with tab_timer:
     st.header("⏱️ Seguimiento del Ayuno")
 
-    # 🔄 refresco automático del timer cada 3 segundos
-    from streamlit_autorefresh import st_autorefresh
-    st_autorefresh(interval=3000, key="fastmind_timer_refresh")
+    # Refresco nativo cada 3 segundos (solo cuando el timer está activo)
+    if st.session_state.running:
+        st.empty()  # placeholder seguro
+        time.sleep(3)
+        st.rerun()
 
     col1, col2 = st.columns(2)
     if col1.button("▶️ Start"):
