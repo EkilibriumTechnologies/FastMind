@@ -46,7 +46,6 @@ def get_phase(hours):
 # ⏳ DIAL DE PROGRESO
 # ==============================================================
 def draw_dial(hours, total=120):
-    """Dial circular del progreso."""
     phase = get_phase(hours)
     color = phase["color_hex"]
     pct = min((hours / total) * 100, 100)
@@ -104,7 +103,6 @@ def ask_fastmind(question, hours):
         except Exception as e:
             print(f"[WARN] RAG error: {e}")
 
-    # Contexto adaptativo
     context = f"""
 You are FastMind, a scientific fasting and wellness coach.
 
@@ -132,40 +130,47 @@ Reference knowledge base:
 
 
 # ==============================================================
-# 🕒 TIMER
+# 🕒 TIMER STATE
 # ==============================================================
 if "start_time" not in st.session_state:
     st.session_state.start_time = None
 if "running" not in st.session_state:
     st.session_state.running = False
+if "elapsed_hours" not in st.session_state:
+    st.session_state.elapsed_hours = 0
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 
+# ==============================================================
+# 🧵 BACKGROUND THREAD QUE ACTUALIZA EL TIEMPO
+# ==============================================================
+def run_timer():
+    while st.session_state.running:
+        st.session_state.elapsed_hours = (time.time() - st.session_state.start_time) / 3600
+        time.sleep(3)
 
-# Botones
+# ==============================================================
+# 🎛 CONTROLES
+# ==============================================================
 col1, col2 = st.columns(2)
 if col1.button("▶️ Start"):
     st.session_state.start_time = time.time()
     st.session_state.running = True
+    thread = threading.Thread(target=run_timer, daemon=True)
+    thread.start()
+
 if col2.button("⏹ Stop"):
     st.session_state.running = False
 
 
 # ==============================================================
-# 🔁 REFRESCO SUAVE SIN BLOQUEAR CHAT
+# 🎯 DIAL DISPLAY (solo se redibuja)
 # ==============================================================
-placeholder = st.empty()
-
 if st.session_state.start_time:
-    while st.session_state.running:
-        elapsed_hours = (time.time() - st.session_state.start_time) / 3600
-        fig, phase = draw_dial(elapsed_hours)
-        with placeholder.container():
-            st.plotly_chart(fig, use_container_width=True)
-            st.markdown(f"<h3 style='text-align:center;'>🌙 {phase['keyword']}</h3>", unsafe_allow_html=True)
-            st.markdown(f"<p style='text-align:center; color:#4A4A4A;'>{phase['tip']}</p>", unsafe_allow_html=True)
-        time.sleep(2)
-        # redibuja solo el dial, sin tocar el resto
+    fig, phase = draw_dial(st.session_state.elapsed_hours)
+    st.plotly_chart(fig, use_container_width=True)
+    st.markdown(f"<h3 style='text-align:center;'>🌙 {phase['keyword']}</h3>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align:center; color:#4A4A4A;'>{phase['tip']}</p>", unsafe_allow_html=True)
 else:
     st.info("Presiona ▶️ **Start** para comenzar tu ayuno.")
 
@@ -178,16 +183,14 @@ st.subheader("💬 Ask FastMind")
 
 question = st.text_input("Ask about fasting, hydration, or mindset:")
 if st.button("Ask"):
-    hours = ((time.time() - st.session_state.start_time) / 3600) if st.session_state.start_time else 0
+    hours = st.session_state.elapsed_hours
     with st.spinner("Thinking..."):
         answer = ask_fastmind(question, hours)
     st.session_state.chat_history.append((question, answer))
 
-# Mostrar historial persistente
 for q, a in st.session_state.chat_history:
     st.markdown(f"**You:** {q}")
     st.markdown(f"💡 *FastMind:* {a}")
-
 
 # ==============================================================
 # ✨ FOOTER
